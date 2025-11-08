@@ -1,0 +1,107 @@
+name: Build/Release
+
+on:
+  push:
+    branches:
+      - '*'
+    tags:
+      - "v*.*.*"
+  pull_request:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.GOOS }}-${{ matrix.GOARCH }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - GOOS: linux
+            GOARCH: amd64
+            EXT: tar.gz
+          - GOOS: darwin
+            GOARCH: amd64
+            EXT: tar.gz
+          - GOOS: windows
+            GOARCH: amd64
+            EXT: zip
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Extract binary name from go.mod
+        id: modname
+        run: |
+          module_name=$(grep '^module ' go.mod | awk '{print $2}')
+          bin_name=$(basename "$module_name")
+          echo "bin_name=$bin_name" >> $GITHUB_OUTPUT
+
+      - name: Build binary (${{ matrix.GOOS }}-${{ matrix.GOARCH }})
+        run: |
+          mkdir -p dist
+          BIN_NAME=${{ steps.modname.outputs.bin_name }}
+          OUT="dist/${BIN_NAME}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}"
+          EXT=$([[ "${{ matrix.GOOS }}" == "windows" ]] && echo ".exe" || echo "")
+          CGO_ENABLED=0 GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} \
+          go build -trimpath -ldflags="-s -w" -o "${OUT}${EXT}" ./...
+
+      - name: Package binary
+        run: |
+          BIN_NAME=${{ steps.modname.outputs.bin_name }}
+          cd dist
+          FILE="${BIN_NAME}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}"
+          if [ "${{ matrix.GOOS }}" = "windows" ]; then
+            zip "${FILE}.zip" "${FILE}.exe"
+            rm "${FILE}.exe"
+          else
+            tar -czf "${FILE}.tar.gz" "${FILE}"
+            rm "${FILE}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.modname.outputs.bin_name }}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}
+          path: dist/${{ steps.modname.outputs.bin_name }}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}.*
+          retention-days: 1
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List downloaded files
+        run: ls -lhR dist
+
+      - name: Extract binary name from go.mod
+        id: modname
+        run: |
+          module_name=$(grep '^module ' go.mod | awk '{print $2}')
+          bin_name=$(basename "$module_name")
+          echo "bin_name=$bin_name" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: dist/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
