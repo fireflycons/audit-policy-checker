@@ -58,13 +58,17 @@ jobs:
         run: |
           BIN_NAME=${{ steps.modname.outputs.bin_name }}
           cd dist
-          FILE="${BIN_NAME}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}"
+          SRC="${BIN_NAME}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}"
+          DEST="${BIN_NAME}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}"
+
           if [ "${{ matrix.GOOS }}" = "windows" ]; then
-            zip "${FILE}.zip" "${FILE}.exe"
-            rm "${FILE}.exe"
+            mv "${SRC}.exe" "${BIN_NAME}.exe"
+            zip "${DEST}.zip" "${BIN_NAME}.exe"
+            rm "${BIN_NAME}.exe"
           else
-            tar -czf "${FILE}.tar.gz" "${FILE}"
-            rm "${FILE}"
+            mv "${SRC}" "${BIN_NAME}"
+            tar -czf "${DEST}.tar.gz" "${BIN_NAME}"
+            rm "${BIN_NAME}"
           fi
 
       - name: Upload artifact
