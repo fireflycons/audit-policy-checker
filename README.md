@@ -29,7 +29,7 @@ It looks for cluster credentials in the following order
 
 ### For each group/resource within a rule
 
-* `group` if present is known to the cluster. I you omit `group`, this is still valid, but defaults to `""`, i.e. `v1`
+* `group` if present is known to the cluster. If you omit `group`, this is still valid, but defaults to `""`, i.e. `v1`
 * `resources` if present then all listed resources are checked for being known to the cluster. If not present, the default is all resources within the group.
 * `namespaces` - If a namespace doesn't exist then a warning will be issued.
 
